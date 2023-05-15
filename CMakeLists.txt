@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(SimpleServer C)
+project(SimpleServer)
 
 set(SERVER_FILES server.c)
 

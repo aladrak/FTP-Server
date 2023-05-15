@@ -86,6 +86,7 @@ int main() {
             for (int i = 0; i < len; i++) {
                 printf ("%c", buff[i]);
             }
+            printf("\n");
             if(buff[0] == 's'){
                 closesocket(listenSocket);
                 break;
