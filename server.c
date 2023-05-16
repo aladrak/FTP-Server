@@ -47,6 +47,7 @@ SOCKET getHost(char* ipAddr, int port) {
 int main() {
     struct sockaddr_in clientAddress;
     char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
+    char curresp[] = "Msg received to client.\n";
 
     // Инициализация Winsock
     WSADATA wsaData;
@@ -91,11 +92,18 @@ int main() {
                 closesocket(listenSocket);
                 break;
             }
+
+            if (send(clientSocket, (char*)&curresp, sizeof(curresp) - 1, 0) == SOCKET_ERROR) {
+                printf("Sending error %d.\n", WSAGetLastError());
+                closesocket(clientSocket);
+                exit(0);
+            }
+            Sleep(5);
         } while (len != 0);
 
-        printf("Msg received.\n");
+        // printf("Msg received.\n");
         // Отправка сообщения клиенту
-        send(clientSocket, response, sizeof(response) - 1, 0);
+        // send(clientSocket, response, sizeof(response) - 1, 0);
 
         // Закрытие сокета клиента
         closesocket(clientSocket);
