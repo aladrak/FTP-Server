@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <winsock2.h>
 
 #define PACKET_MAX_SIZE 512
@@ -44,10 +45,18 @@ SOCKET getHost(char* ipAddr, int port) {
     return s;
 }
 
+void closeServer(SOCKET s, SOCKET c) {
+    char msg[] = "Server stopped...\n\nGoodbye Client! Nice to meet you again!\n\n";
+    printf("Server stopped by client.\n");
+    send(c, (char*)&msg, sizeof(msg) - 1, 0);
+    closesocket(c);
+    closesocket(s);
+    exit(1);
+}
+
 int main() {
     struct sockaddr_in clientAddress;
     char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
-    char curresp[] = "Msg received to client.\n";
 
     // Инициализация Winsock
     WSADATA wsaData;
@@ -58,6 +67,7 @@ int main() {
 
     // Создание слушающего сокета, привязка к адресу
     SOCKET listenSocket = getHost("127.0.0.2", 8080);
+    char confmsg[] = "Msg received to client.\n";
 
     while (1) {
         printf("The server is up at %s and waiting for connections...\n", getSockIp(listenSocket));
@@ -74,12 +84,12 @@ int main() {
         printf("New connection with %s received.\n", getSockIp(clientSocket));
 
         // Отправка сообщения клиенту
-        send(clientSocket, "Hello Client! Welcome to ftp-server!\n\nSend \"stop\" for stop server.\n", sizeof(response) - 1, 0);
+        send(clientSocket, "Hello Client!! Welcome to ftp-server!\n\nSend \'-H\' to get help with server commands.\n", sizeof(response) - 1, 0);
 
-        // Получение сообщения
         int len; 
         char buff[PACKET_MAX_SIZE];
         do {
+            // Получение сообщения
             if ((len = recv(clientSocket, (char*)&buff, PACKET_MAX_SIZE, 0)) == SOCKET_ERROR) {
                 return -1;
             }
@@ -88,17 +98,22 @@ int main() {
                 printf ("%c", buff[i]);
             }
             printf("\n");
-            if(buff[0] == 's'){
-                closesocket(listenSocket);
-                break;
-            }
 
-            if (send(clientSocket, (char*)&curresp, sizeof(curresp) - 1, 0) == SOCKET_ERROR) {
+            if (buff[0] == '-') {
+                if (buff[1] == 'S') {
+                    closeServer(listenSocket, clientSocket);
+                }
+                if (buff[1] == 'H') {
+                    
+                }
+                // Отправка подтверждения получения сообщения
+            } else if (send(clientSocket, (char*)&confmsg, sizeof(confmsg) - 1, 0) == SOCKET_ERROR) {
                 printf("Sending error %d.\n", WSAGetLastError());
                 closesocket(clientSocket);
                 exit(0);
             }
-            Sleep(5);
+
+            Sleep((DWORD)10);
         } while (len != 0);
 
         // printf("Msg received.\n");
@@ -107,7 +122,6 @@ int main() {
 
         // Закрытие сокета клиента
         closesocket(clientSocket);
-
         printf("Connection closed.\n");
     }
 
