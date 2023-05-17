@@ -5,6 +5,36 @@
 
 #define PACKET_MAX_SIZE 512
 
+int procMsg(SOCKET serv, SOCKET clnt, char* buff){
+    char confmsg[] = "Msg received to client.\n";
+    if (buff[0] == '-') {
+        switch (buff[1]) {
+        case 's':
+            char msg[] = "Server stopped...\n\nGoodbye Client! Nice to meet you again!\n\n";
+            printf("Server stopped by client.\n");
+            send(clnt, (char*)&msg, sizeof(msg) - 1, 0);
+            closesocket(clnt);
+            closesocket(serv);
+            return 1;
+        case 'h':
+            char helpmsg[] = "\n-s\tTo stopped server.\n-h\tDisplay help-manual.\n";
+            send(clnt, (char*)&helpmsg, sizeof(helpmsg) - 1, 0);
+            break;
+        default:
+            char nomsg[] = "No such command found. Type -h for help.\n";
+            send(clnt, (char*)&nomsg, sizeof(nomsg) - 1, 0);
+            break;
+        }
+    // Отправка подтверждения получения сообщения
+    } else if (send(clnt, (char*)&confmsg, sizeof(confmsg) - 1, 0) == SOCKET_ERROR) {
+        printf("Sending error %d.\n", WSAGetLastError());
+        closesocket(clnt);
+        exit(0);
+    }
+    return 0;
+}
+
+// Функция получения адреса
 char* getSockIp(SOCKET s){
     struct sockaddr_in name;
     int lenn = sizeof(name);
@@ -15,6 +45,7 @@ char* getSockIp(SOCKET s){
     return inet_ntoa((struct in_addr)name.sin_addr);
 }
 
+// Функция создания хоста
 SOCKET getHost(char* ipAddr, int port) {
     SOCKET s;
     // Создание слушающего сокета
@@ -45,15 +76,6 @@ SOCKET getHost(char* ipAddr, int port) {
     return s;
 }
 
-void closeServer(SOCKET s, SOCKET c) {
-    char msg[] = "Server stopped...\n\nGoodbye Client! Nice to meet you again!\n\n";
-    printf("Server stopped by client.\n");
-    send(c, (char*)&msg, sizeof(msg) - 1, 0);
-    closesocket(c);
-    closesocket(s);
-    exit(1);
-}
-
 int main() {
     struct sockaddr_in clientAddress;
     char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
@@ -67,7 +89,6 @@ int main() {
 
     // Создание слушающего сокета, привязка к адресу
     SOCKET listenSocket = getHost("127.0.0.2", 8080);
-    char confmsg[] = "Msg received to client.\n";
 
     while (1) {
         printf("The server is up at %s and waiting for connections...\n", getSockIp(listenSocket));
@@ -80,11 +101,10 @@ int main() {
             closesocket(listenSocket);
             return 1;
         }
-
         printf("New connection with %s received.\n", getSockIp(clientSocket));
 
         // Отправка сообщения клиенту
-        send(clientSocket, "Hello Client!! Welcome to ftp-server!\n\nSend \'-H\' to get help with server commands.\n", sizeof(response) - 1, 0);
+        send(clientSocket, "Hello Client!! Welcome to ftp-server!\n\nSend \'-h\' to get help with server commands.\n", sizeof(response) - 1, 0);
 
         int len; 
         char buff[PACKET_MAX_SIZE];
@@ -99,18 +119,8 @@ int main() {
             }
             printf("\n");
 
-            if (buff[0] == '-') {
-                if (buff[1] == 'S') {
-                    closeServer(listenSocket, clientSocket);
-                }
-                if (buff[1] == 'H') {
-                    
-                }
-                // Отправка подтверждения получения сообщения
-            } else if (send(clientSocket, (char*)&confmsg, sizeof(confmsg) - 1, 0) == SOCKET_ERROR) {
-                printf("Sending error %d.\n", WSAGetLastError());
-                closesocket(clientSocket);
-                exit(0);
+            if (procMsg(listenSocket, clientSocket, (char*)&buff)){
+                return 1;
             }
 
             Sleep((DWORD)10);
@@ -130,6 +140,5 @@ int main() {
 
     // Освобождение ресурсов Winsock
     WSACleanup();
-
     return 0;
 }
