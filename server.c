@@ -3,27 +3,77 @@
 #include <string.h>
 #include <winsock2.h>
 
-#define PACKET_MAX_SIZE 512
+#define SIZE_BUF 512
 
 int procMsg(SOCKET serv, SOCKET clnt, char* buff){
     char confmsg[] = "Msg received to client.\n";
     if (buff[0] == '-') {
-        switch (buff[1]) {
-        case 's':
+// Остановка сервера
+        if (!strncmp(buff, "-stop", 5)) {
             char msg[] = "Server stopped...\n\nGoodbye Client! Nice to meet you again!\n\n";
             printf("Server stopped by client.\n");
             send(clnt, (char*)&msg, sizeof(msg) - 1, 0);
             closesocket(clnt);
             closesocket(serv);
             return 1;
-        case 'h':
-            char helpmsg[] = "\n-s\tTo stopped server.\n-h\tDisplay help-manual.\n";
+// Вывод помощи по командам
+        } else if (!strncmp(buff, "-help", 5)) {
+            char helpmsg[] = "\n-stop\t\tStopped server.\n-help\t\tHelp-manual.\n-list\tList of files.\n-sendfile\tTransfer from client to server.\n-getfile\tTransfer from server to client.\n";
             send(clnt, (char*)&helpmsg, sizeof(helpmsg) - 1, 0);
-            break;
-        default:
-            char nomsg[] = "No such command found. Type -h for help.\n";
+            return 0;
+// Отправка файла от клиента
+        } else if (!strncmp(buff, "-sendfile", 9)) {
+            printf("Start file-transfer operation from client.\n");
+            int len = 0;
+            char msg[] = "Send to server name of file.\n";
+            send(clnt, (char*)&msg, sizeof(msg) - 1, 0);
+
+            printf("Waiting filename...\n");
+            char inputbuff[SIZE_BUF];
+            if ((len = recv(clnt, (char*)&inputbuff, SIZE_BUF, 0)) == SOCKET_ERROR) {
+                printf("Recive error.\n");
+            }
+            inputbuff[len] = '\0';
+            char fmsg[] = "Filename recived. Waiting for file.\n";
+            send(clnt, (char*)&fmsg, sizeof(fmsg) - 1, 0);
+            printf("Recived filename: %s\n", inputbuff);
+            // char filename[32];
+            // strcpy((char*)&filename, buff);
+
+            FILE *file = fopen(inputbuff, "wb");
+            if (file == NULL) {
+                printf("Creating file error.\n");
+                fclose(file);
+                closesocket(clnt);
+                return 1;
+            }
+
+            while (1) {
+                if ((len = recv(clnt, (char*)&inputbuff, SIZE_BUF, 0)) == SOCKET_ERROR) {
+                    // error
+                }
+                if (!strncmp(inputbuff, "-end", 4)) {
+                    break;
+                }
+                if (len > 0) {
+                    fwrite(inputbuff, 1, len, file);
+                } 
+            }
+
+            fclose(file);
+            printf("Successfully receiving and saving the file %s!\n");
+            return 0;
+// Отправка файла клиенту
+        } else if (!strncmp(buff, "-getfile", 8)) {
+
+        } else if (!strncmp(buff, "-list", 5)) {
+
+        } else if (!strncmp(buff, "-login", 6)) {
+
+        }
+        else {
+            char nomsg[] = "No such command found. Type -help for help.\n";
             send(clnt, (char*)&nomsg, sizeof(nomsg) - 1, 0);
-            break;
         }
     // Отправка подтверждения получения сообщения
     } else if (send(clnt, (char*)&confmsg, sizeof(confmsg) - 1, 0) == SOCKET_ERROR) {
@@ -107,12 +157,13 @@ int main() {
         send(clientSocket, "Hello Client!! Welcome to ftp-server!\n\nSend \'-h\' to get help with server commands.\n", sizeof(response) - 1, 0);
 
         int len; 
-        char buff[PACKET_MAX_SIZE];
+        char buff[SIZE_BUF];
         do {
             // Получение сообщения
-            if ((len = recv(clientSocket, (char*)&buff, PACKET_MAX_SIZE, 0)) == SOCKET_ERROR) {
+            if ((len = recv(clientSocket, (char*)&buff, SIZE_BUF, 0)) == SOCKET_ERROR) {
                 return -1;
             }
+            buff[len] = '\0';
             printf("Client: ");
             for (int i = 0; i < len; i++) {
                 printf ("%c", buff[i]);
