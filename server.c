@@ -6,11 +6,9 @@
 #define SIZE_BUF 512
 
 int procMsg(SOCKET serv, SOCKET clnt, char* buff){
-
     if (buff[0] == '-') {
 // Остановка сервера
         if (!strncmp(buff, "-stop", 5)) {
-            // char msg[] = "Server stopped...\n\nGoodbye Client! Nice to meet you again!\n\n";
             printf("Server stopped by client.\n");
             snprintf(buff, SIZE_BUF, "Server stopped... Goodbye Client! Nice to meet you again!\n");
             send(clnt, buff, strlen(buff), 0);
@@ -98,11 +96,11 @@ int procMsg(SOCKET serv, SOCKET clnt, char* buff){
     return 0;
 }
 
-// Функция получения адреса
+// Получение адреса
 char* getSockIp(SOCKET s){
     struct sockaddr_in name;
     int lenn = sizeof(name);
-    ZeroMemory (&name, sizeof (name));
+    ZeroMemory(&name, sizeof (name));
     if (SOCKET_ERROR == getsockname(s, (struct sockaddr*)&name, &lenn)) {
         return NULL;
     }
@@ -185,7 +183,8 @@ int main() {
                 printf ("%c", buff[i]);
             }
             printf("\n");
-
+            
+            // Обработка сообщений, выполнение команд
             if (procMsg(listenSocket, clientSocket, (char*)&buff)){
                 return 1;
             }
