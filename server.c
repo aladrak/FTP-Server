@@ -6,41 +6,49 @@
 #define SIZE_BUF 512
 
 int procMsg(SOCKET serv, SOCKET clnt, char* buff){
-    char confmsg[] = "Msg received to client.\n";
+
     if (buff[0] == '-') {
 // Остановка сервера
         if (!strncmp(buff, "-stop", 5)) {
-            char msg[] = "Server stopped...\n\nGoodbye Client! Nice to meet you again!\n\n";
+            // char msg[] = "Server stopped...\n\nGoodbye Client! Nice to meet you again!\n\n";
             printf("Server stopped by client.\n");
-            send(clnt, (char*)&msg, sizeof(msg) - 1, 0);
+            snprintf(buff, SIZE_BUF, "Server stopped... Goodbye Client! Nice to meet you again!\n");
+            send(clnt, buff, strlen(buff), 0);
             closesocket(clnt);
             closesocket(serv);
             return 1;
 // Вывод помощи по командам
         } else if (!strncmp(buff, "-help", 5)) {
-            char helpmsg[] = "\n-stop\t\tStopped server.\n-help\t\tHelp-manual.\n-list\tList of files.\n-sendfile\tTransfer from client to server.\n-getfile\tTransfer from server to client.\n";
-            send(clnt, (char*)&helpmsg, sizeof(helpmsg) - 1, 0);
+            snprintf(buff, SIZE_BUF, "\n-stop\t\tStopped server.\n-help\t\tHelp-manual.\n-list\t\tList of files.\n-sendfile\tTransfer from client to server.\n-getfile\tTransfer from server to client.\n");
+            send(clnt, buff, strlen(buff), 0);
             return 0;
 // Отправка файла от клиента
         } else if (!strncmp(buff, "-sendfile", 9)) {
-            printf("Start file-transfer operation from client.\n");
             int len = 0;
-            char msg[] = "Send to server name of file.\n";
-            send(clnt, (char*)&msg, sizeof(msg) - 1, 0);
+            printf("Start file-transfer operation from client.\n");
 
-            printf("Waiting filename...\n");
-            char inputbuff[SIZE_BUF];
-            if ((len = recv(clnt, (char*)&inputbuff, SIZE_BUF, 0)) == SOCKET_ERROR) {
-                printf("Recive error.\n");
+            snprintf(buff, SIZE_BUF, "Send to server name of file.\n");
+            send(clnt, buff, strlen(buff), 0);
+
+            printf("Waiting for filename...\n");
+
+            // char inputbuff[SIZE_BUF];
+            if ((len = recv(clnt, buff, SIZE_BUF, 0)) == SOCKET_ERROR) {
+                printf("Error getting filename.\n");
+                closesocket(clnt);
+                return 1;
             }
-            inputbuff[len] = '\0';
-            char fmsg[] = "Filename recived. Waiting for file.\n";
-            send(clnt, (char*)&fmsg, sizeof(fmsg) - 1, 0);
-            printf("Recived filename: %s\n", inputbuff);
-            // char filename[32];
-            // strcpy((char*)&filename, buff);
+            printf("Recived filename: ");
 
-            FILE *file = fopen(inputbuff, "wb");
+            char filename[128];
+            strncpy((char*)&filename, buff, len);
+            filename[len] = '\0';
+            printf("%s\n", filename);
+
+            snprintf(buff, SIZE_BUF, "Filename received. Waiting for file.\n");
+            send(clnt, buff, strlen(buff), 0);
+            
+            FILE *file = fopen(filename, "wb");
             if (file == NULL) {
                 printf("Creating file error.\n");
                 fclose(file);
@@ -49,19 +57,24 @@ int procMsg(SOCKET serv, SOCKET clnt, char* buff){
             }
 
             while (1) {
-                if ((len = recv(clnt, (char*)&inputbuff, SIZE_BUF, 0)) == SOCKET_ERROR) {
-                    // error
+                if ((len = recv(clnt, buff, SIZE_BUF, 0)) == SOCKET_ERROR) {
+                    printf("File retrieval error.\n");
+                    fclose(file);
+                    closesocket(clnt);
+                    return 1;
                 }
-                if (!strncmp(inputbuff, "-end", 4)) {
+                if (!strncmp(buff, "-end", 4)) {
                     break;
                 }
                 if (len > 0) {
-                    fwrite(inputbuff, 1, len, file);
+                    fwrite(buff, 1, len, file);
                 } 
             }
 
             fclose(file);
-            printf("Successfully receiving and saving the file %s!\n");
+            printf("Successfully receiving and saving the file %s!\n", filename);
+            snprintf(buff, SIZE_BUF, "Successfully receiving and saving the file.\n");
+            send(clnt, buff, strlen(buff), 0);
             return 0;
 // Отправка файла клиенту
         } else if (!strncmp(buff, "-getfile", 8)) {
@@ -70,16 +83,17 @@ int procMsg(SOCKET serv, SOCKET clnt, char* buff){
 
         } else if (!strncmp(buff, "-login", 6)) {
 
-        }
-        else {
-            char nomsg[] = "No such command found. Type -help for help.\n";
-            send(clnt, (char*)&nomsg, sizeof(nomsg) - 1, 0);
+        } else {
+            snprintf(buff, SIZE_BUF, "No such command found. Type -help for help.\n");
+            send(clnt, buff, strlen(buff), 0);
         }
     // Отправка подтверждения получения сообщения
-    } else if (send(clnt, (char*)&confmsg, sizeof(confmsg) - 1, 0) == SOCKET_ERROR) {
-        printf("Sending error %d.\n", WSAGetLastError());
-        closesocket(clnt);
-        exit(0);
+    } else {
+        snprintf(buff, SIZE_BUF, "Msg received to client.\n");
+        if (send(clnt, buff, strlen(buff), 0) == SOCKET_ERROR) {
+            closesocket(clnt);
+            exit(0);
+        }
     }
     return 0;
 }
@@ -90,7 +104,7 @@ char* getSockIp(SOCKET s){
     int lenn = sizeof(name);
     ZeroMemory (&name, sizeof (name));
     if (SOCKET_ERROR == getsockname(s, (struct sockaddr*)&name, &lenn)) {
-        // Error
+        return NULL;
     }
     return inet_ntoa((struct in_addr)name.sin_addr);
 }
@@ -127,8 +141,9 @@ SOCKET getHost(char* ipAddr, int port) {
 }
 
 int main() {
+    FILE *file_login, *file_password;
     struct sockaddr_in clientAddress;
-    char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
+    // char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
 
     // Инициализация Winsock
     WSADATA wsaData;
@@ -141,6 +156,8 @@ int main() {
     SOCKET listenSocket = getHost("127.0.0.2", 8080);
 
     while (1) {
+        int len; 
+        char buff[SIZE_BUF];
         printf("The server is up at %s and waiting for connections...\n", getSockIp(listenSocket));
 
         // Принятие входящего соединения
@@ -154,10 +171,9 @@ int main() {
         printf("New connection with %s received.\n", getSockIp(clientSocket));
 
         // Отправка сообщения клиенту
-        send(clientSocket, "Hello Client!! Welcome to ftp-server!\n\nSend \'-h\' to get help with server commands.\n", sizeof(response) - 1, 0);
-
-        int len; 
-        char buff[SIZE_BUF];
+        snprintf(buff, SIZE_BUF, "Hello Client!! Welcome to ftp-server!\n\nSend \'-h\' to get help with server commands.\n");
+        send(clientSocket, buff, strlen(buff), 0);
+        
         do {
             // Получение сообщения
             if ((len = recv(clientSocket, (char*)&buff, SIZE_BUF, 0)) == SOCKET_ERROR) {
@@ -181,12 +197,10 @@ int main() {
         // Отправка сообщения клиенту
         // send(clientSocket, response, sizeof(response) - 1, 0);
 
-        // Закрытие сокета клиента
         closesocket(clientSocket);
         printf("Connection closed.\n");
     }
 
-    // Закрытие слушающего сокета
     closesocket(listenSocket);
 
     // Освобождение ресурсов Winsock
