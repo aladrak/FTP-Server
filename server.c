@@ -4,6 +4,10 @@
 #include <winsock2.h>
 
 #define SIZE_BUF 512
+#define QTY_LOG 10
+#define LEN_LOG 11
+#define QTY_PASS 10
+#define LEN_PASS 11
 
 int procMsg(SOCKET serv, SOCKET clnt, char* buff){
     if (buff[0] == '-') {
@@ -78,14 +82,16 @@ int procMsg(SOCKET serv, SOCKET clnt, char* buff){
         } else if (!strncmp(buff, "-getfile", 8)) {
 
         } else if (!strncmp(buff, "-list", 5)) {
-
+            
         } else if (!strncmp(buff, "-login", 6)) {
-
+            printf("Start of the client authorization operation.\n");
+            snprintf(buff, SIZE_BUF, "Successfully receiving and saving the file.\n");
+            send(clnt, buff, strlen(buff), 0);
         } else {
             snprintf(buff, SIZE_BUF, "No such command found. Type -help for help.\n");
             send(clnt, buff, strlen(buff), 0);
         }
-    // Отправка подтверждения получения сообщения
+// Отправка подтверждения получения сообщения
     } else {
         snprintf(buff, SIZE_BUF, "Msg received to client.\n");
         if (send(clnt, buff, strlen(buff), 0) == SOCKET_ERROR) {
@@ -140,7 +146,47 @@ SOCKET getHost(char* ipAddr, int port) {
 
 int main() {
     FILE *file_login, *file_password;
+    char trash;
+    int auth_flag = 0, log_counter = 0;
+    char login[QTY_LOG][LEN_LOG], password[QTY_PASS][LEN_PASS];
     struct sockaddr_in clientAddress;
+    
+// Выборка сохранённых логинов и занесение в массив
+    file_login = fopen("file_login.txt", "r");
+    if (!feof(file_login)) {
+        fscanf(file_login, "%d", &log_counter);
+        fscanf(file_login, "%c", &trash);
+        for (int i = 0; i < log_counter; i++) {
+            fread(login[i], sizeof(login[i])-1, 1, file_login);
+            login[i][LEN_LOG-1] = '\0';
+            fscanf(file_login, "%c", &trash);
+            printf("%s %d %d\n", login[i], strlen(login[i]), sizeof(login[i]));
+        }
+    } else {
+        printf("File open error.\n");
+        exit(0);
+    }
+    fclose(file_login);
+    printf("File \'file_login.txt\' initialized.\n");
+
+// Выборка сохранённых паролей и занесение в массив
+    file_password = fopen("file_password.txt", "r");
+    if (!feof(file_password)) {
+        fscanf(file_password, "%d", &log_counter);
+        fscanf(file_password, "%c", &trash);
+        for (int i = 0; i < log_counter; i++) {
+            fread(password[i], sizeof(password[i]) - 1, 1, file_password);
+            password[i][LEN_LOG-1] = '\0';
+            fscanf(file_password, "%c", &trash);
+            printf("%s %d %d\n", password[i], strlen(password[i]), sizeof(password[i]));
+        }
+    } else {
+        printf("File open error.\n");
+        exit(0);
+    }
+    fclose(file_password);
+    printf("File \'file_password.txt\' initialized.\n");
+    
     // char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
 
     // Инициализация Winsock
