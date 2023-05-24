@@ -4,12 +4,10 @@
 #include <winsock2.h>
 
 #define SIZE_BUF 512
-#define QTY_LOG 10
-#define LEN_LOG 11
-#define QTY_PASS 10
-#define LEN_PASS 11
+#define LEN_LOGPASS 11
+#define QTY_LOGPASS 10
 
-int procMsg(SOCKET serv, SOCKET clnt, char* buff){
+int procMsg(SOCKET serv, SOCKET clnt, char* buff, char pass[][LEN_LOGPASS], char login[][LEN_LOGPASS], int counter){
     if (buff[0] == '-') {
 // Остановка сервера
         if (!strncmp(buff, "-stop", 5)) {
@@ -21,7 +19,7 @@ int procMsg(SOCKET serv, SOCKET clnt, char* buff){
             return 1;
 // Вывод помощи по командам
         } else if (!strncmp(buff, "-help", 5)) {
-            snprintf(buff, SIZE_BUF, "\n-stop\t\tStopped server.\n-help\t\tHelp-manual.\n-list\t\tList of files.\n-sendfile\tTransfer from client to server.\n-getfile\tTransfer from server to client.\n");
+            snprintf(buff, SIZE_BUF, "\n-stop\t\tStopped server.\n-help\t\tHelp-manual.\n-list\t\tList of files.\n-sendfile\tTransfer from client to server.\n-getfile\tTransfer from server to client.\n-login\tClient authorization.\n-reg\tNew client registration.\n");
             send(clnt, buff, strlen(buff), 0);
             return 0;
 // Отправка файла от клиента
@@ -81,12 +79,95 @@ int procMsg(SOCKET serv, SOCKET clnt, char* buff){
 // Отправка файла клиенту
         } else if (!strncmp(buff, "-getfile", 8)) {
 
+// Вывод каталога файлов
         } else if (!strncmp(buff, "-list", 5)) {
             
+// Авторизация клиента
         } else if (!strncmp(buff, "-login", 6)) {
+            int len = 0, auth_login = 0, auth_pass = 0;
             printf("Start of the client authorization operation.\n");
-            snprintf(buff, SIZE_BUF, "Successfully receiving and saving the file.\n");
+            snprintf(buff, SIZE_BUF, "Start authorization operation. Send your login [%d].\n", LEN_LOGPASS - 1);
             send(clnt, buff, strlen(buff), 0);
+            char check[LEN_LOGPASS];
+            while (1) {
+                // Проверка логина
+                if ((len = recv(clnt, buff, SIZE_BUF, 0)) == SOCKET_ERROR) {
+                    printf("Error getting login.\n");
+                    closesocket(clnt);
+                    return 1;
+                }
+    
+                strncpy((char*)&check, buff, len);
+                check[len] = '\0';
+                printf("Recived login: %s [%d]\n", check, len);
+                // Проверка длины (переделать)
+                if (len != LEN_LOGPASS - 1) {
+                    printf("Invalid login length. Repeating.\n");
+                    snprintf(buff, SIZE_BUF, "Invalid login length. Repeat sending your login.\n");
+                    send(clnt, buff, strlen(buff), 0);
+                    continue;
+                }
+                break;
+            }
+        
+            // Проверка массива логинов на полученный логин
+            for (int i = 0; i < counter; i++) {
+                if (!strncmp(check, login[i], LEN_LOGPASS - 1)) {
+                    auth_login = 1;
+                    printf("Login %s accepted.\n", login[i]);
+                    snprintf(buff, SIZE_BUF, "Login accepted. Send your password.\n");
+                    send(clnt, buff, strlen(buff), 0);
+                    break;
+                }
+            }
+            // Вывод ошибки при несуществующем логине
+            if (!auth_login) {
+                printf("User with login %s does not exist.\n", check);
+                snprintf(buff, SIZE_BUF, "User with login %s does not exist.\n", check);
+                send(clnt, buff, strlen(buff), 0);
+                return 0;
+            }
+
+            while (1) {
+                // Проверка пароля
+                if ((len = recv(clnt, buff, SIZE_BUF, 0)) == SOCKET_ERROR) {
+                    printf("Error getting password.\n");
+                    closesocket(clnt);
+                    return 1;
+                }
+    
+                strncpy((char*)&check, buff, len);
+                check[len] = '\0';
+                printf("Recived password: %s [%d]\n", check, len);
+                // Проверка длины (переделать)
+                if (len != LEN_LOGPASS - 1) {
+                    printf("Invalid password length. Repeating.\n");
+                    snprintf(buff, SIZE_BUF, "Invalid login length. Repeat sending your password.\n");
+                    send(clnt, buff, strlen(buff), 0);
+                    continue;
+                }
+                break;
+            }
+        
+            // Проверка массива паролей на полученный пароль
+            for (int i = 0; i < counter; i++) {
+                if (!strncmp(check, pass[i], LEN_LOGPASS - 1)) {
+                    auth_pass = 1;
+                    printf("Password %s accepted.\n", login[i]);
+                    snprintf(buff, SIZE_BUF, "Password accepted. You are successfully logged in.\n");
+                    send(clnt, buff, strlen(buff), 0);
+                    break;
+                }
+            }
+
+            // Вывод ошибки при неверном пароле
+            if (!auth_pass) {
+                printf("Password is incorrect.\n", check);
+                snprintf(buff, SIZE_BUF, "Password is incorrect.\n");
+                send(clnt, buff, strlen(buff), 0);
+                return 0;
+            }
+// Отправка ошибки о несуществующей команде
         } else {
             snprintf(buff, SIZE_BUF, "No such command found. Type -help for help.\n");
             send(clnt, buff, strlen(buff), 0);
@@ -100,6 +181,33 @@ int procMsg(SOCKET serv, SOCKET clnt, char* buff){
         }
     }
     return 0;
+}
+
+int uploadFile(char arr[][LEN_LOGPASS], char *path) {
+    FILE *file;
+    int counter = 0;
+    char trash;
+    file = fopen(path, "r");
+    if (!feof(file)) {
+        fscanf(file, "%d", &counter);
+        fscanf(file, "%c", &trash);
+        if (counter >= QTY_LOGPASS) {
+            printf("Too many data in file. Need more buffer!\n");
+            exit(0);
+        }
+        for (int i = 0; i < counter; i++) {
+            fread(arr[i], sizeof(arr[i])-1, 1, file);
+            arr[i][LEN_LOGPASS-1] = '\0';
+            fscanf(file, "%c", &trash);
+            printf("%s len%d szof%d\n", arr[i], strlen(arr[i]), sizeof(arr[i]));
+        }
+    } else {
+        printf("File open error.\n");
+        exit(0);
+    }
+    fclose(file);
+    printf("File \'%s\' initialized.\n", path);
+    return counter;
 }
 
 // Получение адреса
@@ -145,47 +253,18 @@ SOCKET getHost(char* ipAddr, int port) {
 }
 
 int main() {
-    FILE *file_login, *file_password;
-    char trash;
     int auth_flag = 0, log_counter = 0;
-    char login[QTY_LOG][LEN_LOG], password[QTY_PASS][LEN_PASS];
+    char login[QTY_LOGPASS][LEN_LOGPASS], password[QTY_LOGPASS][LEN_LOGPASS];
     struct sockaddr_in clientAddress;
     
 // Выборка сохранённых логинов и занесение в массив
-    file_login = fopen("file_login.txt", "r");
-    if (!feof(file_login)) {
-        fscanf(file_login, "%d", &log_counter);
-        fscanf(file_login, "%c", &trash);
-        for (int i = 0; i < log_counter; i++) {
-            fread(login[i], sizeof(login[i])-1, 1, file_login);
-            login[i][LEN_LOG-1] = '\0';
-            fscanf(file_login, "%c", &trash);
-            printf("%s %d %d\n", login[i], strlen(login[i]), sizeof(login[i]));
-        }
-    } else {
-        printf("File open error.\n");
-        exit(0);
-    }
-    fclose(file_login);
-    printf("File \'file_login.txt\' initialized.\n");
+    log_counter = uploadFile(login, "./auth_files/file_login.txt");
 
 // Выборка сохранённых паролей и занесение в массив
-    file_password = fopen("file_password.txt", "r");
-    if (!feof(file_password)) {
-        fscanf(file_password, "%d", &log_counter);
-        fscanf(file_password, "%c", &trash);
-        for (int i = 0; i < log_counter; i++) {
-            fread(password[i], sizeof(password[i]) - 1, 1, file_password);
-            password[i][LEN_LOG-1] = '\0';
-            fscanf(file_password, "%c", &trash);
-            printf("%s %d %d\n", password[i], strlen(password[i]), sizeof(password[i]));
-        }
-    } else {
-        printf("File open error.\n");
-        exit(0);
+    if (log_counter != uploadFile(password, "./auth_files/file_password.txt")) {
+        printf("Error. Too many data in ratio in logpass files!\n");
+        return 0;
     }
-    fclose(file_password);
-    printf("File \'file_password.txt\' initialized.\n");
     
     // char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
 
@@ -215,7 +294,7 @@ int main() {
         printf("New connection with %s received.\n", getSockIp(clientSocket));
 
         // Отправка сообщения клиенту
-        snprintf(buff, SIZE_BUF, "Hello Client!! Welcome to ftp-server!\n\nSend \'-h\' to get help with server commands.\n");
+        snprintf(buff, SIZE_BUF, "Welcome to ftp-server!\n\nSend \'-help\' to get help with server commands.\n");
         send(clientSocket, buff, strlen(buff), 0);
         
         do {
@@ -226,12 +305,12 @@ int main() {
             buff[len] = '\0';
             printf("Client: ");
             for (int i = 0; i < len; i++) {
-                printf ("%c", buff[i]);
+                printf("%c", buff[i]);
             }
             printf("\n");
             
             // Обработка сообщений, выполнение команд
-            if (procMsg(listenSocket, clientSocket, (char*)&buff)){
+            if (procMsg(listenSocket, clientSocket, (char*)&buff, password, login, log_counter)){
                 return 1;
             }
 
