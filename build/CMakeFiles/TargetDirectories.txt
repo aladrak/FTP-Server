@@ -1,0 +1,3 @@
+C:/Programming/ftp/ftp_serv/build/CMakeFiles/server.dir
+C:/Programming/ftp/ftp_serv/build/CMakeFiles/edit_cache.dir
+C:/Programming/ftp/ftp_serv/build/CMakeFiles/rebuild_cache.dir

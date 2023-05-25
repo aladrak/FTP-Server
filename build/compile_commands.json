@@ -1,0 +1,8 @@
+[
+{
+  "directory": "C:/Programming/ftp/ftp_serv/build",
+  "command": "C:\\msys64\\mingw64\\bin\\gcc.exe -g -o CMakeFiles\\server.dir\\server.c.obj -c C:\\Programming\\ftp\\ftp_serv\\server.c",
+  "file": "C:\\Programming\\ftp\\ftp_serv\\server.c",
+  "output": "CMakeFiles\\server.dir\\server.c.obj"
+}
+]
