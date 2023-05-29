@@ -22,7 +22,15 @@
 #define CODE_LIST 4
 #define CODE_SEND 5 
 #define CODE_GET 6
-#define CODE_EXIT 7
+#define CODE_REMOVE 7
+#define CODE_EXIT 8
+
+int getNextChar(char* str1, char *str2) {
+	char *p;
+	 if ((p = strstr(str1, str2)) != NULL)
+        return(p - str1 + strlen(str2));
+    return 0;
+}
 
 // Обработчик команд
 int procMsgr(char* buff) {
@@ -40,6 +48,8 @@ int procMsgr(char* buff) {
         return CODE_SEND;
     if (!strncmp(buff, "-getfile", 8))
         return CODE_GET;
+    if (!strncmp(buff, "-remove", 7))
+        return CODE_REMOVE;
     if (!strncmp(buff, "-exit", 5))
         return CODE_EXIT; 
     return INT_MAX; // lucky
@@ -193,12 +203,28 @@ void sendFile(SOCKET clnt, char* buff, int auth_user) {
     send(clnt, buff, strlen(buff), 0);
 }
 
+void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
+    char filename[strlen(buff) - 8];
+    // snprintf(filename, 128, "");
+    int j = 0;
+    for (int i = getNextChar(buff, "-getfile"); i < strlen(buff); i++) {
+        if (buff[i] == ' ') { continue; }
+        filename[j++] = buff[i];
+        printf(" %d ", j);  
+    }
+    filename[j] = '\0';
+    printf("Recived filename \'%s\' fnlen%d buflen%d .\n", filename, strlen(filename), strlen(buff));
+    exit(0);
+}
+
 // Отправка файла сервер -> клиент
 void getFile(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user){
     // Проверка на вход
     if (auth_user == NO_LOGGED) {
         snprintf(buff, SIZE_BUF, "-end");
         send(clnt, buff, strlen(buff), 0);
+
+        Sleep((DWORD)25);
 
         printf("The client is not logged in.\n");
         snprintf(buff, SIZE_BUF, "Log in before using this command.\n");
@@ -220,17 +246,21 @@ void getFile(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user){
             closesocket(clnt);
             exit(0);
         }
-        printf("Recived filename: ");
-        printf("%s\n", buff);
         buff[len] = '\0';
+        printf("Recived filename: \'%s\', %d\n", buff, len);
         strcpy(recvfilename, buff);
 
         // Проверка длины
         if (len > LEN_FILENAME && len < 2) {
-            printf("Invalid filename length. Repeating.\n");
-            snprintf(buff, SIZE_BUF, "Invalid filename length. Repeat sending your filename.\n");
+            snprintf(buff, SIZE_BUF, "-end");
             send(clnt, buff, strlen(buff), 0);
-            continue;
+
+            Sleep((DWORD)25);
+
+            printf("Invalid filename length.\n");
+            snprintf(buff, SIZE_BUF, "Invalid filename length. Canceling.\n");
+            send(clnt, buff, strlen(buff), 0);
+            return;
         }
 
         snprintf(buff, SIZE_BUF, "%s/%s/", FOLDER_FILES, login[auth_user]);
@@ -245,8 +275,8 @@ void getFile(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user){
         struct dirent* filename;
         while ((filename = readdir(dir)) != NULL) {
             if (strlen(filename->d_name) > 2 && !strncmp(filename->d_name, recvfilename, strlen(recvfilename))) {
-                printf("A valid file name has been received. Start of file transfer.\n");
-                snprintf(buff, SIZE_BUF, "A valid file name has been received. Start of file transfer. -start\n");
+                printf("A valid filename has been received. Start of file transfer.\n");
+                snprintf(buff, SIZE_BUF, "A valid filename has been received. Start of file transfer.\n");
                 send(clnt, buff, strlen(buff), 0);
                 break;
             }
@@ -719,7 +749,10 @@ int main() {
                     sendFile(clientSocket, (char*)&buff, auth_user);
                     break;
                 case CODE_GET: // -getfile Отправка файла сервер -> клиент
-                    getFile(clientSocket, (char*)&buff, login, auth_user);
+                    getFileCom(clientSocket, (char*)&buff, login, auth_user);
+                    //getFile(clientSocket, (char*)&buff, login, auth_user);
+                    break;
+                case CODE_REMOVE:
                     break;
                 case CODE_EXIT: // -exit Прекращение сессии
                     closesocket(clientSocket);
