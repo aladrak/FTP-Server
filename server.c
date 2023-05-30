@@ -210,7 +210,24 @@ void sendFile(SOCKET clnt, char* buff, int auth_user) {
     send(clnt, buff, strlen(buff), 0);
 }
 
+// Отправка файла сервер -> клиент
 void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
+    // Проверка на вход
+    if (auth_user == NO_LOGGED) {
+        printf("The client is not logged in.\n");
+        snprintf(buff, SIZE_BUF, "Log in before using this command.\n");
+        send(clnt, buff, strlen(buff), 0);
+        return;
+    }
+
+    // Проверка на неправильные символы
+    if ((strpbrk(buff, "\\/*[]{}()\'\"^%#№$@!?&:;=+`~") != NULL)) {
+        printf("Wrong characters in the filename.\n");
+        snprintf(buff, SIZE_BUF, "Wrong characters in the filename.\n");
+        send(clnt, buff, strlen(buff), 0);
+        return;
+    }
+
     char filename[strlen(buff) - sizeof("-getfile") - getQtyChar(buff, ' ') + 1];
     if (buff[strlen("-getfile")] != ' ') {
         printf("Received an invalid filename.\n");
@@ -220,11 +237,61 @@ void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_use
     for (int i = sizeof("-getfile"); i < strlen(buff); i++) {
         if (buff[i] == ' ') { continue; }
         filename[j++] = buff[i];
-        printf(" %d ", j);  
     }
     filename[j] = '\0';
-    printf("Recived filename \'%s\' fnlen%d fnsz%d buflen%d .\n", filename, strlen(filename), sizeof(filename), strlen(buff));
-    exit(0);
+    printf("Recived filename \'%s\' fnlen%d fnsz%d buflen%d.\n", filename, strlen(filename), sizeof(filename), strlen(buff));
+    
+    snprintf(buff, SIZE_BUF, "%s/%s", FOLDER_FILES, login[auth_user]);
+    buff[strlen(buff)] = '\0';
+
+    DIR* dir = opendir(buff);
+    if (!dir) {
+        perror("diropen");
+    }
+    // Поиск нужного файла в директории пользователя
+    struct dirent* flnm;
+    while ((flnm = readdir(dir)) != NULL) {
+        if (strlen(flnm->d_name) > 2 && !strncmp(flnm->d_name, filename, strlen(filename))) {
+            printf("A valid filename has been received. Start of file transfer.\n");
+            break;
+        }
+    }
+    closedir(dir);
+    if (flnm->d_name == NULL){
+        printf("No such file exists.\n");
+        snprintf(buff, SIZE_BUF, "No such file exists.\n");
+        send(clnt, buff, strlen(buff), 0);
+        return;
+    }
+
+    char tempdir[strlen(FOLDER_FILES) + LEN_LOGPASS + strlen(filename) + 2];
+    snprintf(buff, SIZE_BUF, "%s/%s/", FOLDER_FILES, login[auth_user], filename);
+    printf("szof tempdir%d\n", sizeof(tempdir));
+    FILE *file = fopen(buff, "rb");
+    if (file == NULL) {
+        printf("Failed to open file for reading.\n");
+        closesocket(clnt);
+        return;
+    }
+
+    snprintf(buff, SIZE_BUF, "GET");
+    send(clnt, buff, strlen(buff), 0);
+
+    while (1) {
+        int bytesRead = fread(buff, 1, SIZE_BUF, file);
+        if (bytesRead > 0) {
+            send(clnt, buff, bytesRead, 0);
+        } else {
+            break;
+        }
+    }
+    snprintf(buff, SIZE_BUF, "-end");
+    send(clnt, buff, strlen(buff), 0);
+
+    snprintf(buff, SIZE_BUF, "Successful sending of the file \'%s\' to the client.\n", tempdir);
+    send(clnt, buff, strlen(buff), 0);
+
+    fclose(file);
 }
 
 // Отправка файла сервер -> клиент
@@ -743,7 +810,7 @@ int main() {
                     stopServ(listenSocket, clientSocket);
                     return 1;
                 case CODE_HELP: // -help Вывод помощи по командам
-                    snprintf(buff, SIZE_BUF, "\n-stop\t\tStopped server.\n-help\t\tShows help-manual.\n-login\t\tClient authorization.\n-reg\t\tNew client registration.\n-list\t\tList of files.\n-sendfile\tTransfer file from client to server.\n-getfile\tTransfer file from server to client.\n-exit\t\tEnd of session.\n");
+                    snprintf(buff, SIZE_BUF, "\n-stop\t\tStopped server.\n-help\t\tShows help-manual.\n-login\t\tClient authorization.\n-reg\t\tNew client registration.\n-list\t\tList of files.\n-sendfile\tTransfer file from client to server.\n-getfile <filename>\tTransfer file from server to client.\n-exit\t\tEnd of session.\n");
                     send(clientSocket, buff, strlen(buff), 0);
                     break;
                 case CODE_LOGIN: // -login Авторизация клиента
