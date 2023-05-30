@@ -25,11 +25,18 @@
 #define CODE_REMOVE 7
 #define CODE_EXIT 8
 
-int getNextChar(char* str1, char *str2) {
-	char *p;
-	 if ((p = strstr(str1, str2)) != NULL)
-        return(p - str1 + strlen(str2));
-    return 0;
+int getQtyChar(char* str1, char str2) {
+	// char *p;
+	//  if ((p = strstr(str1, str2)) != NULL)
+    //     return(p - str1 + strlen(str2));
+    // return 0;
+    int j = 0;
+    for (int i = 0; i < strlen(str1); i++){
+        if (str1[i] == str2) {
+            j++;
+        }
+    }
+    return j;
 }
 
 // Обработчик команд
@@ -204,16 +211,19 @@ void sendFile(SOCKET clnt, char* buff, int auth_user) {
 }
 
 void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
-    char filename[strlen(buff) - 8];
-    // snprintf(filename, 128, "");
+    char filename[strlen(buff) - sizeof("-getfile") - getQtyChar(buff, ' ') + 1];
+    if (buff[strlen("-getfile")] != ' ') {
+        printf("Received an invalid filename.\n");
+        return;
+    }
     int j = 0;
-    for (int i = getNextChar(buff, "-getfile"); i < strlen(buff); i++) {
+    for (int i = sizeof("-getfile"); i < strlen(buff); i++) {
         if (buff[i] == ' ') { continue; }
         filename[j++] = buff[i];
         printf(" %d ", j);  
     }
     filename[j] = '\0';
-    printf("Recived filename \'%s\' fnlen%d buflen%d .\n", filename, strlen(filename), strlen(buff));
+    printf("Recived filename \'%s\' fnlen%d fnsz%d buflen%d .\n", filename, strlen(filename), sizeof(filename), strlen(buff));
     exit(0);
 }
 
