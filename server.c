@@ -9,6 +9,9 @@
 #define QTY_LOGPASS 10
 #define LEN_FILENAME 25
 
+#define IP_ADDR "127.0.0.2"
+#define PORT 8080
+
 #define FOLDER_AUTH "./auth_files"
 #define FOLDER_FILES "./stored_files"
 #define FOLDER_SHARED "/shared"
@@ -27,17 +30,41 @@
 #define CODE_REMOVE 7
 #define CODE_EXIT 8
 
-typedef struct LogPassData {
-    char password[LEN_LOGPASS];
-    char login[LEN_LOGPASS];
-}LPData;
+// Проверка на вход/символы/корректность команды
+int checkFilename(SOCKET s, char* buff, char* command, int auth_user) {
+    // Проверка на вход
+    if (auth_user == NO_LOGGED) {
+        printf("The client is not logged in.\n");
+        snprintf(buff, SIZE_BUF, "Log in before using this command.\n");
+        send(s, buff, strlen(buff), 0);
+        return 1;
+    }
 
+    // Проверка на неправильные символы
+    if ((strpbrk(buff, WRONG_CHARS) != NULL)) {
+        printf("Wrong characters in the filename.\n");
+        snprintf(buff, SIZE_BUF, "Wrong characters in the filename.\n");
+        send(s, buff, strlen(buff), 0);
+        return 1;
+    }
+
+    // Проверка на правильность ввода команды
+    if (buff[strlen(command)] != ' ') {
+        printf("Received an invalid filename.\n");
+        snprintf(buff, SIZE_BUF, "Received an invalid filename.\n");
+        send(s, buff, strlen(buff), 0);
+        return 1;
+    }
+
+    return 0; // Успех
+}
+
+// Подсчёт кол-ва символов в строке
 int getQtyChar(char* str1, char str2) {
     int j = 0;
     for (int i = 0; i < strlen(str1); i++){
-        if (str1[i] == str2) {
+        if (str1[i] == str2)
             j++;
-        }
     }
     return j;
 }
@@ -69,7 +96,7 @@ int procMsgr(char* buff) {
 void stopServ(SOCKET serv, SOCKET clnt) {
     char buff[SIZE_BUF];
     printf("Server stopped by client.\n");
-    snprintf(buff, SIZE_BUF, "Server stopped... Goodbye Client! Nice to meet you again!\n");
+    snprintf(buff, SIZE_BUF, "STOP");
     send(clnt, buff, strlen(buff), 0);
     closesocket(clnt);
     closesocket(serv);
@@ -78,16 +105,16 @@ void stopServ(SOCKET serv, SOCKET clnt) {
 // Отправка списка файлов в директории пользователя
 void showList(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
     // Проверка на вход
-    if (auth_user == -1) {
-        snprintf(buff, SIZE_BUF, "-end");
-        send(clnt, buff, strlen(buff), 0);
-
+    if (auth_user == NO_LOGGED) {
         printf("The client is not logged in.\n");
         snprintf(buff, SIZE_BUF, "Log in before using this command.\n");
         send(clnt, buff, strlen(buff), 0);
         return;
     }
 
+    snprintf(buff, SIZE_BUF, "LIST");
+    send(clnt, buff, strlen(buff), 0);
+    
     snprintf(buff, SIZE_BUF, "%s/%s", FOLDER_FILES, login[auth_user]);
     buff[strlen(buff)] = '\0';
     char tempdir[strlen(buff)];
@@ -117,49 +144,33 @@ void showList(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user)
         snprintf(buff, SIZE_BUF, "No files in the directory.\n");
         send(clnt, buff, strlen(buff), 0);
     }
-    //end sending
-    Sleep((DWORD)20);
-    snprintf(buff, SIZE_BUF, "-end");
+
+    Sleep((DWORD)30);
+
+    snprintf(buff, SIZE_BUF, "-END");
     send(clnt, buff, strlen(buff), 0);
 
-    snprintf(buff, SIZE_BUF, "List ended.\n");
+    snprintf(buff, SIZE_BUF, "The list of files has been sent successfully.\n");
     send(clnt, buff, strlen(buff), 0);
     free(filename);
 }
 
-// Получение файла клиент -> сервер
-void sendFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
-    // Проверка на вход
-    if (auth_user == NO_LOGGED) {
-        printf("The client is not logged in.\n");
-        snprintf(buff, SIZE_BUF, "Log in before using this command.\n");
-        send(clnt, buff, strlen(buff), 0);
-        return;
-    }
-
-    // Проверка на неправильные символы
-    if ((strpbrk(buff, WRONG_CHARS) != NULL)) {
-        printf("Wrong characters in the filename.\n");
-        snprintf(buff, SIZE_BUF, "Wrong characters in the filename.\n");
-        send(clnt, buff, strlen(buff), 0);
+// Удаление файла в директории пользователя
+void removeFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
+    // Проверка на вход/символы/корректность команды
+    if (checkFilename(clnt, buff, "-remove", auth_user)) {
         return;
     }
 
     // Выборка названия файла из вызова команды
-    char filename[strlen(buff) - sizeof("-sendfile") - getQtyChar(buff, ' ') + 1];
-    if (buff[strlen("-sendfile")] != ' ') {
-        printf("Received an invalid filename.\n");
-        snprintf(buff, SIZE_BUF, "Received an invalid filename.\n");
-        send(clnt, buff, strlen(buff), 0);
-        return;
-    }
+    char filename[strlen(buff) - sizeof("-remove") - getQtyChar(buff, ' ') + 2];
     int j = 0;
-    for (int i = sizeof("-sendfile"); i < strlen(buff); i++) {
+    for (int i = sizeof("-remove"); i < strlen(buff); i++) {
         if (buff[i] == ' ') { continue; }
         filename[j++] = buff[i];
     }
     filename[j] = '\0';
-    printf("Recived filename \'%s\' fnlen%d fnsz%d buflen%d.\n", filename, strlen(filename), sizeof(filename), strlen(buff));
+    printf("[DB] Filename: \'%s\' fnlen%d fnsz%d buflen%d.\n", filename, strlen(filename), sizeof(filename), strlen(buff));
 
     // Проверка длины
     if (sizeof(filename) > LEN_FILENAME || sizeof(filename) < 2) {
@@ -169,15 +180,108 @@ void sendFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_us
         return;
     }
 
+    // Проверка существования нужного файла в директории пользователя
+    snprintf(buff, SIZE_BUF, "%s/%s", FOLDER_FILES, login[auth_user]);
+    buff[strlen(buff)] = '\0';
+    
+    DIR* dir = opendir(buff);
+    if (!dir) {
+        perror("diropen");
+    }
+    struct dirent* flnm;
+    while ((flnm = readdir(dir)) != NULL) {
+        // Если файл найден
+        if (strlen(flnm->d_name) > 2 && !strncmp(flnm->d_name, filename, sizeof(filename))) {
+            printf("A valid filename has been received. Start deleting a file.\n");
+            break;
+        }
+    }
+    // Если файл не найден
+    if (flnm == NULL){
+        printf("The specified file was not found in the user's directory.\n");
+        snprintf(buff, SIZE_BUF, "File \'%s\' is not in your directory.\n", filename);
+        send(clnt, buff, strlen(buff), 0);
+        return;
+    }
+    closedir(dir);
+
+    // Создание пути до нужного файла
     int templen = strlen(FOLDER_FILES) + LEN_LOGPASS + strlen(filename) + 2;
     char tempdir[templen];
 
     snprintf(tempdir, templen, "%s/%s/%s", FOLDER_FILES, login[auth_user], filename);
     tempdir[templen] = '\0';
-    printf("szof %s %d\n", tempdir, sizeof(tempdir));
+    
+    if (remove(tempdir)) {
+        printf("File deletion error.\n");
+        snprintf(buff, SIZE_BUF, "File deletion error \'%s\'.\n", tempdir);
+        send(clnt, buff, strlen(buff), 0);
+        return;
+    }
+
+    printf("Successfully deleting the file \'%s\'.\n", tempdir);
+    snprintf(buff, SIZE_BUF, "Successfully deleting the file \'%s\'.\n", tempdir);
+    send(clnt, buff, strlen(buff), 0);
+}
+
+// Получение файла клиент -> сервер
+void sendFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
+    // Проверка на вход/символы/корректность команды
+    if (checkFilename(clnt, buff, "-sendfile", auth_user)) {
+        return;
+    }
+
+    // Выборка названия файла из вызова команды
+    char filename[strlen(buff) - sizeof("-sendfile") - getQtyChar(buff, ' ') + 2];
+    int j = 0;
+    for (int i = sizeof("-sendfile"); i < strlen(buff); i++) {
+        if (buff[i] == ' ') { continue; }
+        filename[j++] = buff[i];
+    }
+    filename[j] = '\0';
+    printf("[DB] Filename: \'%s\' fnlen%d fnsz%d buflen%d.\n", filename, strlen(filename), sizeof(filename), strlen(buff));
+
+    // Проверка длины
+    if (sizeof(filename) > LEN_FILENAME || sizeof(filename) < 2) {
+        printf("Invalid filename length.\n");
+        snprintf(buff, SIZE_BUF, "Invalid filename length. Canceling.\n");
+        send(clnt, buff, strlen(buff), 0);
+        return;
+    }
 
     // Проверка существования такого файла
+    snprintf(buff, SIZE_BUF, "%s/%s", FOLDER_FILES, login[auth_user]);
+    buff[strlen(buff)] = '\0';
+    
+    DIR* dir = opendir(buff);
+    if (!dir) {
+        perror("diropen");
+    }
+    struct dirent* flnm;
+    while ((flnm = readdir(dir)) != NULL) {
+        // Если файл найден
+        if (strlen(flnm->d_name) > 2 && !strncmp(flnm->d_name, filename, sizeof(filename))) {
+            printf("A file with this name already exists in the user's directory.\n");
+            snprintf(buff, SIZE_BUF, "A file with this name already exists in the user's directory.\n", filename);
+            send(clnt, buff, strlen(buff), 0);
+            return;
+        }
+    }
+    // Если файл не найден
+    if (flnm == NULL){
+        printf("The file was successfully not found in the user's directory.\n");
+    }
+    closedir(dir);
 
+    // Создание пути до нужного файла
+    int templen = strlen(FOLDER_FILES) + LEN_LOGPASS + strlen(filename) + 2;
+    char tempdir[templen];
+
+    snprintf(tempdir, templen, "%s/%s/%s", FOLDER_FILES, login[auth_user], filename);
+    tempdir[templen] = '\0';
+    printf("Opening a file \'%s\' %d for writing.\n", tempdir, templen);
+
+    // Отправка команды и названия файла
     snprintf(buff, SIZE_BUF, "SEND %s", filename);
     send(clnt, buff, strlen(buff), 0);
 
@@ -205,47 +309,29 @@ void sendFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_us
             fwrite(buff, 1, len, file);
         } 
     }
-
     fclose(file);
-    printf("Successfully receiving the file %s!\n", filename);
 
-    snprintf(buff, SIZE_BUF, "Successfully receiving and saving the file.\n");
+    printf("Successfully receiving and saving of the file \'%s\'!\n", filename);
+    snprintf(buff, SIZE_BUF, "Successfully receiving and saving of the file \'%s\'.\n", tempdir);
     send(clnt, buff, strlen(buff), 0);
 }
 
 // Отправка файла сервер -> клиент
 void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_user) {
-    // Проверка на вход
-    if (auth_user == NO_LOGGED) {
-        printf("The client is not logged in.\n");
-        snprintf(buff, SIZE_BUF, "Log in before using this command.\n");
-        send(clnt, buff, strlen(buff), 0);
+    // Проверка на вход/символы/корректность команды
+    if (checkFilename(clnt, buff, "-getfile", auth_user)) {
         return;
     }
 
-    // Проверка на неправильные символы
-    if ((strpbrk(buff, WRONG_CHARS) != NULL)) {
-        printf("Wrong characters in the filename.\n");
-        snprintf(buff, SIZE_BUF, "Wrong characters in the filename.\n");
-        send(clnt, buff, strlen(buff), 0);
-        return;
-    }
-
-    // Выборка название файла из вызова команды
-    char filename[strlen(buff) - sizeof("-getfile") - getQtyChar(buff, ' ') + 1];
-    if (buff[strlen("-getfile")] != ' ') {
-        printf("Received an invalid filename.\n");
-        snprintf(buff, SIZE_BUF, "Received an invalid filename.\n");
-        send(clnt, buff, strlen(buff), 0);
-        return;
-    }
+    // Выборка названия файла из вызова команды
+    char filename[strlen(buff) - sizeof("-getfile") - getQtyChar(buff, ' ') + 2];
     int j = 0;
     for (int i = sizeof("-getfile"); i < strlen(buff); i++) {
         if (buff[i] == ' ') { continue; }
         filename[j++] = buff[i];
     }
     filename[j] = '\0';
-    printf("Recived filename \'%s\' fnlen%d fnsz%d buflen%d.\n", filename, strlen(filename), sizeof(filename), strlen(buff));
+    printf("[DB] Filename: \'%s\' fnlen%d fnsz%d buflen%d.\n", filename, strlen(filename), sizeof(filename), strlen(buff));
 
     // Проверка длины
     if (sizeof(filename) > LEN_FILENAME || sizeof(filename) < 2) {
@@ -255,6 +341,7 @@ void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_use
         return;
     }
 
+    // Проверка существования нужного файла в директории пользователя
     snprintf(buff, SIZE_BUF, "%s/%s", FOLDER_FILES, login[auth_user]);
     buff[strlen(buff)] = '\0';
     
@@ -262,30 +349,32 @@ void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_use
     if (!dir) {
         perror("diropen");
     }
-    // Поиск нужного файла в директории пользователя
     struct dirent* flnm;
     while ((flnm = readdir(dir)) != NULL) {
+        // Если файл найден
         if (strlen(flnm->d_name) > 2 && !strncmp(flnm->d_name, filename, sizeof(filename))) {
             printf("A valid filename has been received. Start of file transfer.\n");
             break;
         }
     }
-    closedir(dir);
+    // Если файл не найден
     if (flnm == NULL){
         printf("The specified file was not found in the user's directory.\n");
         snprintf(buff, SIZE_BUF, "File \'%s\' is not in your directory.\n", filename);
         send(clnt, buff, strlen(buff), 0);
         return;
     }
+    closedir(dir);
 
+    // Создание пути до нужного файла
     int templen = strlen(FOLDER_FILES) + LEN_LOGPASS + strlen(filename) + 2;
     char tempdir[templen];
 
     snprintf(tempdir, templen, "%s/%s/%s", FOLDER_FILES, login[auth_user], filename);
     tempdir[templen] = '\0';
-    printf("szof %s %d\n", tempdir, sizeof(tempdir));
+    printf("Opening a file \'%s\' %d for reading.\n", tempdir, templen);
 
-    // Отправка команды и название файла
+    // Отправка команды и названия файла
     snprintf(buff, SIZE_BUF, "GET %s", filename);
     send(clnt, buff, strlen(buff), 0);
 
@@ -305,17 +394,16 @@ void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_use
             break;
         }
     }
+    fclose(file);
 
     Sleep((DWORD)30);
-
+    // Отправка сообщения об окончании передачи файла
     snprintf(buff, SIZE_BUF, "-END");
     send(clnt, buff, strlen(buff), 0);
 
-    printf("successful acceptance and saving of the file \'%s\'.\n", tempdir);
+    printf("Successful acceptance and saving of the file \'%s\'.\n", tempdir);
     snprintf(buff, SIZE_BUF, "Successful acceptance and saving of the file \'%s\'.\n", tempdir);
     send(clnt, buff, strlen(buff), 0);
-
-    fclose(file);
 }
 
 // Авторизация клиента
@@ -639,11 +727,6 @@ char* getSockIp(SOCKET s){
     return inet_ntoa((struct in_addr)name.sin_addr);
 }
 
-void sendToSock(SOCKET clnt, char* buff, char* text) {
-    snprintf(buff, SIZE_BUF, text);
-    send(clnt, buff, strlen(buff), 0);
-}
-
 // Функция создания хоста
 SOCKET getHost(char* ipAddr, int port) {
     SOCKET s;
@@ -676,13 +759,12 @@ SOCKET getHost(char* ipAddr, int port) {
 }
 
 int main() {
-    int auth_user = NO_LOGGED, log_counter = 0;
-    LPData logpass[QTY_LOGPASS];
-    char login[QTY_LOGPASS][LEN_LOGPASS], password[QTY_LOGPASS][LEN_LOGPASS];
-    struct sockaddr_in clientAddress;
+    int auth_user = NO_LOGGED;
+    char login[QTY_LOGPASS][LEN_LOGPASS], 
+    password[QTY_LOGPASS][LEN_LOGPASS];
 
 // Создание каталогов для файлов и выгрузка logpass
-    log_counter = createDir(login, password);
+    int log_counter = createDir(login, password);
 
     // char response[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<h1>Hello, World!</h1>";
 
@@ -694,7 +776,7 @@ int main() {
     }
 
 // Создание слушающего сокета, привязка к адресу
-    SOCKET listenSocket = getHost("127.0.0.2", 8080);
+    SOCKET listenSocket = getHost(IP_ADDR, PORT);
 
     while (1) {
         int len; 
@@ -702,6 +784,7 @@ int main() {
         printf("The server is up at %s and waiting for connections...\n", getSockIp(listenSocket));
 
         // Принятие входящего соединения
+        struct sockaddr_in clientAddress;
         int clientAddressSize = sizeof(clientAddress);
         SOCKET clientSocket = accept(listenSocket, (struct sockaddr*)&clientAddress, &clientAddressSize);
         if (clientSocket == INVALID_SOCKET) {
@@ -712,9 +795,8 @@ int main() {
         printf("New connection with %s received.\n", getSockIp(clientSocket));
 
         // Отправка сообщения клиенту
-        // snprintf(buff, SIZE_BUF, "Welcome to ftp-server!\n\nSend \'-help\' to get help with server commands.\n");
-        // send(clientSocket, buff, strlen(buff), 0);
-        sendToSock(clientSocket, buff, "Welcome to ftp-server!\n\nSend \'-help\' to get help with server commands.\n");
+        snprintf(buff, SIZE_BUF, "Welcome to ftp-server!\n\nSend \'-help\' to get help with server commands.\n");
+        send(clientSocket, buff, strlen(buff), 0);
         
         do {
             // Получение сообщения
@@ -735,7 +817,7 @@ int main() {
                     stopServ(listenSocket, clientSocket);
                     return 1;
                 case CODE_HELP: // -help Вывод помощи по командам
-                    snprintf(buff, SIZE_BUF, "\n-stop\t\tStopped server.\n-help\t\tShows help-manual.\n-login\t\tClient authorization.\n-reg\t\tNew client registration.\n-list\t\tList of files.\n-sendfile <filename>\tTransfer file from client to server.\n-getfile <filename>\tTransfer file from server to client.\n-exit\t\tEnd of session.\n");
+                    snprintf(buff, SIZE_BUF, "\n-stop\t\tStopped server.\n-help\t\tShows help-manual.\n-login\t\tClient authorization.\n-reg\t\tNew client registration.\n-list\t\tList of files.\n-sendfile <filename>\tTransfer file from client to server.\n-getfile <filename>\tTransfer file from server to client.\n-remove <filename>\tRemoving a file from a directory.\n-exit\t\tEnd of session.\n");
                     send(clientSocket, buff, strlen(buff), 0);
                     break;
                 case CODE_LOGIN: // -login Авторизация клиента
@@ -753,9 +835,12 @@ int main() {
                 case CODE_GET: // -getfile Отправка файла сервер -> клиент
                     getFileCom(clientSocket, (char*)&buff, login, auth_user);
                     break;
-                case CODE_REMOVE:
+                case CODE_REMOVE: // -remove Удаление файла
+                    removeFileCom(clientSocket, (char*)&buff, login, auth_user);
                     break;
                 case CODE_EXIT: // -exit Прекращение сессии
+                    snprintf(buff, SIZE_BUF, "EXIT");
+                    send(clientSocket, buff, strlen(buff), 0);
                     closesocket(clientSocket);
                     break;
                 default: // -
