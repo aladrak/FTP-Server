@@ -291,6 +291,20 @@ void sendFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_us
     snprintf(buff, SIZE_BUF, "SEND %s", filename);
     send(clnt, buff, strlen(buff), 0);
 
+    // Получение пароля для регистрации
+    if (recv(clnt, buff, SIZE_BUF, 0) == SOCKET_ERROR) {
+        printf("Error getting password.\n");
+        closesocket(clnt);
+        exit(0);
+    }
+
+    if (!strncmp(buff, "-END", 4)) {
+        printf("The file upload was canceled by the client.\n");
+        snprintf(buff, SIZE_BUF, "The file upload was canceled by the client.\n");
+        send(clnt, buff, strlen(buff), 0);
+        return;
+    }
+
     FILE *file = fopen(tempdir, "wb");
     if (file == NULL) {
         printf("Creating file error.\n");
