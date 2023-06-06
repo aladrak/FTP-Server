@@ -653,7 +653,7 @@ int createDir(char login[][LEN_LOGPASS], char password[][LEN_LOGPASS]) {
     int log_counter = 0;
     char tempdir[128];
 
-    // Создание каталога паролей
+    // Создание logpass каталога
     if (!mkdir(FOLDER_AUTH)) {
         printf("Dir \'%s\' created.\n", FOLDER_AUTH);
     } else { 
@@ -662,11 +662,13 @@ int createDir(char login[][LEN_LOGPASS], char password[][LEN_LOGPASS]) {
     // Выборка сохранённых логинов и занесение в массив
         snprintf(tempdir, 128, "%s/file_login.txt", FOLDER_AUTH);
         tempdir[strlen(tempdir)] = '\0';
+
         log_counter = uploadFile(login, (char*)&tempdir);
 
     // Выборка сохранённых паролей и занесение в массив
         snprintf(tempdir, 128, "%s/file_password.txt", FOLDER_AUTH);
         tempdir[strlen(tempdir)] = '\0';
+
         if (log_counter != uploadFile(password, (char*)&tempdir)) {
             printf("Error. Too many data in ratio in logpass files!\n");
             exit(0);

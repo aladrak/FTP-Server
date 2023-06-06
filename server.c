@@ -3,7 +3,6 @@
 #define IP_ADDR "127.0.0.2"
 #define PORT 8080
 
-
 int main() {
     int auth_user = NO_LOGGED;
     char login[QTY_LOGPASS][LEN_LOGPASS], 
