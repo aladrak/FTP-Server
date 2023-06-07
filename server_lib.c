@@ -392,7 +392,7 @@ void getFileCom(SOCKET clnt, char* buff, char login[][LEN_LOGPASS], int auth_use
 
     snprintf(tempdir, templen, "%s/%s/%s", FOLDER_FILES, login[auth_user], filename);
     tempdir[templen] = '\0';
-    printf("Opening a file \'%s\' %d for reading.\n", tempdir, templen);
+    printf("Opening a file \'%s\' [%d] for reading.\n", tempdir, templen);
 
     // Отправка команды и названия файла
     snprintf(buff, SIZE_BUF, "GET %s", filename);
@@ -479,8 +479,8 @@ int authUser(SOCKET clnt, char* buff, char pass[][LEN_LOGPASS], char login[][LEN
 
     // Вывод ошибки при несуществующем логине
     if (auth == NO_LOGGED) {
-        printf("User with login %s does not exist.\n", check);
-        snprintf(buff, SIZE_BUF, "User with login %s does not exist. Authorization has been cancelled.\n", check);
+        printf("User with login \'%s\' does not exist.\n", check);
+        snprintf(buff, SIZE_BUF, "User with login \'%s\' does not exist. Authorization has been cancelled.\n", check);
         send(clnt, buff, strlen(buff), 0);
         return NO_LOGGED;
     }
@@ -510,7 +510,7 @@ int authUser(SOCKET clnt, char* buff, char pass[][LEN_LOGPASS], char login[][LEN
     // Проверка пароля на соотношение с логином
     if (!strncmp(check, pass[auth], LEN_LOGPASS - 1)) {
         printf("Password for \'%s\' accepted.\n", login[auth]);
-        snprintf(buff, SIZE_BUF, "Password for \'%s\'accepted. You are successfully logged in.\n", login[auth]);
+        snprintf(buff, SIZE_BUF, "Password for \'%s\' accepted. You are successfully logged in.\n", login[auth]);
         send(clnt, buff, strlen(buff), 0);
     }
     // Вывод ошибки при неверном пароле
